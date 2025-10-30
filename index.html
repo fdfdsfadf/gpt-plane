@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Static 3D Plane Simulator</title>
+  <title>Static 3D Plane Simulator (fixed imports)</title>
   <style>
     html,body { height:100%; margin:0; background:linear-gradient(#87CEEB 0%, #bfe9ff 60%, #fff 100%); }
     #app { width:100%; height:100vh; overflow:hidden; position:relative; }
@@ -54,9 +54,19 @@
     <div class="footer">Static 3D Plane Simulator — single-file, works on GitHub Pages</div>
   </div>
 
-  <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
-    import { OrbitControls } from 'https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+  <!--
+    Fix: some sandboxed environments (or older browsers) do not resolve ES module CDN imports.
+    To avoid the "Failed to resolve module specifier 'three'" error, we load the UMD builds of three.js
+    and the non-module OrbitControls which attach to the global THREE object.
+
+    This keeps the file single-file and GitHub-Pages friendly.
+  -->
+
+  <script src="https://unpkg.com/three@0.152.2/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    // Use the global THREE (from three.min.js) and the non-module OrbitControls (which attaches to THREE)
 
     // Basic three.js setup
     const container = document.getElementById('app');
@@ -165,7 +175,7 @@
     cameraTarget.position.set(0, 1.6, -6);
 
     // Controls (for exploring scene in addition to flight controls)
-    const orbit = new OrbitControls(camera, renderer.domElement);
+    const orbit = new THREE.OrbitControls(camera, renderer.domElement);
     orbit.enabled = false; // keep disabled by default (use keyboard) but toggleable with Ctrl
     orbit.maxPolarAngle = Math.PI/2.2;
 
