@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Static 3D Plane Simulator</title>
+  <style>
+    html,body { height:100%; margin:0; background:linear-gradient(#87CEEB 0%, #bfe9ff 60%, #fff 100%); }
+    #app { width:100%; height:100vh; overflow:hidden; position:relative; }
+    canvas { display:block }
+    .hud {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      color: #0b1220;
+      background: rgba(255,255,255,0.85);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      font-size: 13px;
+      line-height:1.35;
+      box-shadow: 0 6px 18px rgba(9, 30, 66, 0.12);
+      min-width:160px;
+    }
+    .instructions {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      color:#fff;
+      background: rgba(0,0,0,0.45);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      font-size: 13px;
+      line-height:1.35;
+      backdrop-filter: blur(3px);
+    }
+    .footer {
+      position: absolute; left:50%; transform:translateX(-50%); bottom:12px; color:#04203a; background:rgba(255,255,255,0.85); padding:8px 12px; border-radius:8px; font-size:12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="hud" id="hud">Speed: 0 m/s<br>Altitude: 0 m<br>Pitch: 0°<br>Roll: 0°</div>
+    <div class="instructions">
+      Controls:<br>
+      W/S — Pitch down/up<br>
+      A/D — Roll left/right<br>
+      Q/E — Yaw left/right<br>
+      Arrow Up/Down — Throttle +/-<br>
+      Space — Reset
+    </div>
+    <div class="footer">Static 3D Plane Simulator — single-file, works on GitHub Pages</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+
+    // Basic three.js setup
+    const container = document.getElementById('app');
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0xaaddff, 0.0006);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x87CEEB);
+    container.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 50000);
+    camera.position.set(0, 5, -12);
+
+    // Lights
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+    hemi.position.set(0, 200, 0);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(-50, 100, -50);
+    scene.add(dir);
+
+    // Ground
+    const groundGeom = new THREE.PlaneGeometry(20000, 20000);
+    const groundMat = new THREE.MeshPhongMaterial({ color: 0x77bb55, depthWrite: true });
+    const ground = new THREE.Mesh(groundGeom, groundMat);
+    ground.rotation.x = -Math.PI/2;
+    ground.position.y = -1;
+    scene.add(ground);
+
+    // Simple sky gradient using large sphere
+    const skyGeo = new THREE.SphereGeometry(40000, 32, 15);
+    const skyMat = new THREE.MeshBasicMaterial({ color: 0x87CEEB, side: THREE.BackSide });
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(sky);
+
+    // Create a simple airplane out of primitives
+    function createPlane() {
+      const group = new THREE.Group();
+
+      // fuselage
+      const fusGeom = new THREE.CylinderGeometry(0.4, 0.4, 6, 12);
+      const fusMat = new THREE.MeshStandardMaterial({ color: 0xd14b3f, metalness:0.2, roughness:0.6 });
+      const fus = new THREE.Mesh(fusGeom, fusMat);
+      fus.rotation.z = Math.PI / 2;
+      group.add(fus);
+
+      // nose
+      const noseGeom = new THREE.ConeGeometry(0.4, 0.9, 12);
+      const nose = new THREE.Mesh(noseGeom, fusMat);
+      nose.rotation.z = Math.PI / 2;
+      nose.position.x = 3.45;
+      group.add(nose);
+
+      // tail
+      const tailGeom = new THREE.BoxGeometry(0.6, 0.02, 0.8);
+      const tail = new THREE.Mesh(tailGeom, fusMat);
+      tail.position.x = -3.1;
+      tail.position.y = 0.28;
+      tail.rotation.z = Math.PI/12;
+      group.add(tail);
+
+      // wings
+      const wingGeom = new THREE.BoxGeometry(0.1, 3.6, 0.6);
+      const wingMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness:0.1, roughness:0.6 });
+      const wing = new THREE.Mesh(wingGeom, wingMat);
+      wing.position.y = 0;
+      wing.position.x = 0;
+      wing.position.z = 0;
+      group.add(wing);
+
+      // left elevator
+      const elevGeom = new THREE.BoxGeometry(0.06, 0.8, 0.22);
+      const elevL = new THREE.Mesh(elevGeom, wingMat);
+      elevL.position.set(-3.15, 0.24, -0.22);
+      group.add(elevL);
+      const elevR = elevL.clone(); elevR.position.z = 0.22; group.add(elevR);
+
+      // propeller (visual only)
+      const propGeom = new THREE.BoxGeometry(0.05, 0.8, 0.06);
+      const propMat = new THREE.MeshStandardMaterial({ color:0x111111 });
+      const prop = new THREE.Mesh(propGeom, propMat);
+      prop.position.x = 3.9;
+      prop.rotation.z = Math.PI/2;
+      group.add(prop);
+
+      // small cockpit dome
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), new THREE.MeshStandardMaterial({ color:0x224477, roughness:0.2 }));
+      dome.position.set(0.65, 0.35, 0);
+      dome.scale.set(1,0.55,1);
+      group.add(dome);
+
+      group.traverse((m)=>{ if(m.isMesh) m.castShadow = true; });
+
+      return { group, prop, elevL, elevR };
+    }
+
+    const planeParts = createPlane();
+    const plane = planeParts.group;
+    scene.add(plane);
+
+    // Camera follow target
+    const cameraTarget = new THREE.Object3D();
+    plane.add(cameraTarget);
+    cameraTarget.position.set(0, 1.6, -6);
+
+    // Controls (for exploring scene in addition to flight controls)
+    const orbit = new OrbitControls(camera, renderer.domElement);
+    orbit.enabled = false; // keep disabled by default (use keyboard) but toggleable with Ctrl
+    orbit.maxPolarAngle = Math.PI/2.2;
+
+    // Flight state
+    const state = {
+      velocity: 0,          // m/s
+      throttle: 10,         // power
+      minThrottle: 0,
+      maxThrottle: 120,
+      pitchRate: 0,         // radians/s
+      rollRate: 0,
+      yawRate: 0,
+      pitch: 0,
+      roll: 0,
+      yaw: 0,
+      altitude: 100,
+    };
+
+    // keyboard input
+    const keys = {};
+    window.addEventListener('keydown', (e)=>{ keys[e.code] = true; if(e.code === 'Space') resetPlane(); if(e.ctrlKey) orbit.enabled = true; });
+    window.addEventListener('keyup', (e)=>{ keys[e.code] = false; if(!e.ctrlKey) orbit.enabled = false; });
+
+    function resetPlane(){
+      plane.position.set(0, 50, 0);
+      plane.rotation.set(0, 0, 0);
+      state.velocity = 40;
+      state.throttle = 40;
+      state.pitch = state.roll = state.yaw = 0;
+      camera.position.set(0,5,-12);
+    }
+
+    resetPlane();
+
+    // HUD
+    const hud = document.getElementById('hud');
+
+    // Simple physics & aerodynamic-like controls (very approximate)
+    const dtMax = 1/30;
+    let last = performance.now()/1000;
+
+    function updatePhysics(dt){
+      // input -> angular rates
+      const pitchInput = (keys['KeyS']?1:0) - (keys['KeyW']?1:0);
+      const rollInput = (keys['KeyD']?1:0) - (keys['KeyA']?1:0);
+      const yawInput  = (keys['KeyE']?1:0) - (keys['KeyQ']?1:0);
+      const throttleUp = keys['ArrowUp'];
+      const throttleDown = keys['ArrowDown'];
+
+      state.throttle += (throttleUp?40:0) * dt;
+      state.throttle -= (throttleDown?40:0) * dt;
+      state.throttle = Math.max(state.minThrottle, Math.min(state.maxThrottle, state.throttle));
+
+      // angular velocities (simple)
+      const angSpeed = 0.8;
+      state.pitch += pitchInput * angSpeed * dt;
+      state.roll  += rollInput * angSpeed * dt;
+      state.yaw   += yawInput * (angSpeed*0.6) * dt;
+
+      // limit angles
+      const maxAngle = Math.PI/3;
+      state.pitch = Math.max(-maxAngle, Math.min(maxAngle, state.pitch));
+      state.roll  = Math.max(-maxAngle, Math.min(maxAngle, state.roll));
+
+      // update plane orientation
+      plane.rotation.x = state.pitch;
+      plane.rotation.z = state.roll;
+      plane.rotation.y = state.yaw;
+
+      // compute forward vector
+      const forward = new THREE.Vector3(1,0,0);
+      forward.applyQuaternion(plane.quaternion);
+
+      // simplistic lift: more lift when speed and wings level
+      const speed = state.velocity;
+      const lift = Math.max(0, 0.02 * speed * speed * Math.cos(state.roll));
+
+      // altitude change
+      plane.position.y += (forward.y * speed * dt) + lift * dt - 9.81*0.01*dt; // gravity scaled down
+
+      // forward acceleration from throttle (and drag)
+      const thrust = state.throttle * 0.08;
+      const drag = 0.002 * speed * speed + 0.01 * Math.abs(state.roll);
+      const accel = (thrust - drag);
+      state.velocity += accel * dt;
+      state.velocity = Math.max(0, state.velocity);
+
+      // move plane forward
+      plane.position.x += forward.x * state.velocity * dt;
+      plane.position.z += forward.z * state.velocity * dt;
+
+      // keep above ground
+      if(plane.position.y < 1){ plane.position.y = 1; state.velocity *= 0.7; }
+
+      // prop spin visual
+      planeParts.prop.rotation.x += state.velocity * 0.2 * dt;
+
+      // update HUD values
+      const deg = (r)=> (r*180/Math.PI).toFixed(1);
+      hud.innerHTML = `Speed: ${state.velocity.toFixed(1)} m/s<br>Altitude: ${plane.position.y.toFixed(1)} m<br>Pitch: ${deg(state.pitch)}°<br>Roll: ${deg(state.roll)}°`;
+    }
+
+    // camera follow
+    function updateCamera(dt){
+      // desired camera position relative to plane
+      const offset = new THREE.Vector3(-12, 5, 0);
+      offset.applyQuaternion(plane.quaternion);
+      const desired = new THREE.Vector3().copy(plane.position).add(offset);
+      camera.position.lerp(desired, Math.min(1, 3*dt));
+
+      const lookAt = new THREE.Vector3().copy(plane.position).add(new THREE.Vector3(4,1,0).applyQuaternion(plane.quaternion));
+      camera.lookAt(lookAt);
+    }
+
+    // resize
+    window.addEventListener('resize', ()=>{
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // main loop
+    function animate(){
+      const now = performance.now()/1000;
+      let dt = Math.min(dtMax, now - last);
+      last = now;
+
+      updatePhysics(dt);
+      updateCamera(dt);
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+
+    // Helpful note for hosting: drop this single file into your repo and publish with GitHub Pages (main branch -> /)
+  </script>
+</body>
+</html>
